@@ -1,0 +1,9 @@
+{
+  "serverUrl": "https://surreal.visualstudio.com",
+  "project": "Era",
+  "workspace": "NIKIPC",
+  "tfPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\TeamFoundation\\Team Explorer\\TF.exe",
+  "root": ".",
+  "serverPath": "$/Era/Prototypes/Overpowered",
+  "authType": "integrated"
+}

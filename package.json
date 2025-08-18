@@ -1,0 +1,237 @@
+{
+  "name": "vstfs",
+  "displayName": "VSTFS",
+  "description": "Team Foundation Version Control integration with a Visual Studio-like flow (get/merge/check-in/branches/history/changesets/rollback).",
+  "publisher": "your-name",
+  "version": "0.0.1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/vstfs.git"
+  },
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:vstfs.getLatest",
+    "onCommand:vstfs.checkIn",
+    "onCommand:vstfs.merge",
+    "onCommand:vstfs.createBranch",
+    "onCommand:vstfs.showHistory",
+    "onCommand:vstfs.showChangeset",
+    "onCommand:vstfs.rollbackChangeset",
+    "onView:vstfs.pendingChanges",
+    "onView:vstfs.branches",
+    "onView:vstfs.history"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vstfs",
+          "title": "VSTFS",
+          "icon": "$(source-control)"
+        }
+      ]
+    },
+    "views": {
+      "vstfs": [
+        {
+          "id": "vstfs.pendingChanges",
+          "name": "Pending Changes"
+        },
+        {
+          "id": "vstfs.branches",
+          "name": "Branches"
+        },
+        {
+          "id": "vstfs.history",
+          "name": "History"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "vstfs.getLatest",
+        "title": "TFVC: Get Latest",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "vstfs.checkIn",
+        "title": "TFVC: Check In",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "vstfs.merge",
+        "title": "TFVC: Merge...",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "vstfs.createBranch",
+        "title": "TFVC: Create Branch...",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "vstfs.showHistory",
+        "title": "TFVC: Show History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "vstfs.showChangeset",
+        "title": "TFVC: Open Changeset...",
+        "icon": "$(search)"
+      },
+      {
+        "command": "vstfs.rollbackChangeset",
+        "title": "TFVC: Rollback to Changeset...",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "vstfs.openFile",
+        "title": "Open File",
+        "icon": "$(file)"
+      },
+      {
+        "command": "vstfs.diffFile",
+        "title": "Compare with Previous Version",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "vstfs.revertFile",
+        "title": "Revert File",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "vstfs.refreshView",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "vstfs.getLatest",
+          "when": "view == vstfs.pendingChanges",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vstfs.checkIn",
+          "when": "view == vstfs.pendingChanges",
+          "group": "navigation@2"
+        },
+        {
+          "command": "vstfs.createBranch",
+          "when": "view == vstfs.branches",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vstfs.merge",
+          "when": "view == vstfs.branches",
+          "group": "navigation@2"
+        },
+        {
+          "command": "vstfs.showHistory",
+          "when": "view == vstfs.history",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vstfs.refreshView",
+          "when": "view == vstfs.pendingChanges || view == vstfs.branches || view == vstfs.history",
+          "group": "navigation@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vstfs.getLatest",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.checkIn",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.merge",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.createBranch",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.showHistory",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.showChangeset",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.rollbackChangeset",
+          "when": "true"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vstfs.openFile",
+          "when": "view == vstfs.pendingChanges && viewItem == pending-edit",
+          "group": "inline"
+        },
+        {
+          "command": "vstfs.openFile",
+          "when": "view == vstfs.pendingChanges && viewItem == pending-add",
+          "group": "inline"
+        },
+        {
+          "command": "vstfs.openFile",
+          "when": "view == vstfs.pendingChanges && viewItem == pending-delete",
+          "group": "inline"
+        },
+        {
+          "command": "vstfs.openFile",
+          "when": "view == vstfs.pendingChanges && viewItem == pending-rename",
+          "group": "inline"
+        },
+        {
+          "command": "vstfs.openFile",
+          "when": "view == vstfs.pendingChanges && viewItem == pending-merge",
+          "group": "inline"
+        },
+        {
+          "command": "vstfs.showChangeset",
+          "when": "view == vstfs.history && viewItem == history-changeset",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VSTFS",
+      "properties": {
+        "vstfs.tfPath": {
+          "type": "string",
+          "default": "C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\TeamFoundation\\\\Team Explorer\\\\TF.exe",
+          "description": "Path to the TFVC CLI (tf.exe)."
+        },
+        "vstfs.serverUrl": { "type": "string", "default": "" },
+        "vstfs.project": { "type": "string", "example": "MyProject" },
+        "vstfs.workspace": { "type": "string", "example": "MyWorkspace" },
+        "vstfs.serverPath": { "type": "string", "default": "$/Era/Prototypes/Overpowered", "description": "TFVC server path for the project (e.g., $/Project/Path)" },
+        "vstfs.root": { "type": "string", "default": "." }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "package": "vsce package",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.99.0",
+    "@vscode/test-electron": "^2.4.0",
+    "typescript": "^5.4.0",
+    "vsce": "^2.15.0"
+  }
+}

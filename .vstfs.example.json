@@ -1,0 +1,10 @@
+{
+  "serverUrl": "http://tfs.company.local:8080/tfs/DefaultCollection",
+  "project": "MyProject",
+  "workspace": "MyWorkspace",
+  "tfPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\TeamFoundation\\Team Explorer\\TF.exe",
+  "root": ".",
+  "auth": {
+    "type": "integrated"
+  }
+}
