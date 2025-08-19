@@ -68,6 +68,29 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.window.registerTreeDataProvider("vstfs.history", historyView)
   );
 
+  // Auto-refresh when views become visible
+  const pendingTreeView = vscode.window.createTreeView("vstfs.pendingChanges", { treeDataProvider: pendingView });
+  const branchesTreeView = vscode.window.createTreeView("vstfs.branches", { treeDataProvider: branchesView });
+  const historyTreeView = vscode.window.createTreeView("vstfs.history", { treeDataProvider: historyView });
+
+  ctx.subscriptions.push(
+    pendingTreeView.onDidChangeVisibility(e => {
+      if (e.visible) {
+        pendingView.refresh();
+      }
+    }),
+    branchesTreeView.onDidChangeVisibility(e => {
+      if (e.visible) {
+        branchesView.refresh();
+      }
+    }),
+    historyTreeView.onDidChangeVisibility(e => {
+      if (e.visible) {
+        historyView.refresh();
+      }
+    })
+  );
+
   // Refresh helpers for menus
   reg("vstfs.pendingChanges.refresh", () => pendingView.refresh());
   reg("vstfs.branches.refresh", () => branchesView.refresh());
