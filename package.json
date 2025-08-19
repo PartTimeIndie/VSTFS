@@ -17,6 +17,7 @@
     "onStartupFinished",
     "onCommand:vstfs.getLatest",
     "onCommand:vstfs.checkIn",
+    "onCommand:vstfs.checkInAll",
     "onCommand:vstfs.merge",
     "onCommand:vstfs.createBranch",
     "onCommand:vstfs.showHistory",
@@ -60,7 +61,12 @@
       },
       {
         "command": "vstfs.checkIn",
-        "title": "TFVC: Check In",
+        "title": "TFVC: Check In (Select Files)",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "vstfs.checkInAll",
+        "title": "TFVC: Check In All",
         "icon": "$(cloud-upload)"
       },
       {
@@ -122,6 +128,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "vstfs.checkInAll",
+          "when": "view == vstfs.pendingChanges",
+          "group": "navigation@3"
+        },
+        {
           "command": "vstfs.createBranch",
           "when": "view == vstfs.branches",
           "group": "navigation@1"
@@ -139,7 +150,7 @@
         {
           "command": "vstfs.refreshView",
           "when": "view == vstfs.pendingChanges || view == vstfs.branches || view == vstfs.history",
-          "group": "navigation@3"
+          "group": "navigation@4"
         }
       ],
       "commandPalette": [
@@ -149,6 +160,10 @@
         },
         {
           "command": "vstfs.checkIn",
+          "when": "true"
+        },
+        {
+          "command": "vstfs.checkInAll",
           "when": "true"
         },
         {

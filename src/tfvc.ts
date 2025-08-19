@@ -50,7 +50,7 @@ export class TFVC {
     console.log(message);
   }
 
-  private toLocalPath(serverOrLocalPath: string): string {
+  public toLocalPath(serverOrLocalPath: string): string {
     const cleaned = serverOrLocalPath.replace(/;C\d+$/i, "");
     // Already a local absolute path
     if (/^[A-Za-z]:\\/.test(cleaned)) return cleaned;
@@ -282,8 +282,29 @@ export class TFVC {
   }
 
   async checkIn(comment: string, files?: string[]): Promise<void> {
-    const args = ["checkin", `/comment:${comment || ""}`];
-    if (files && files.length) args.push(...files);
+    // Ensure newly added files are pended (like VS "Promote")
+    try {
+      await this.run(["add", ".", "/recursive", "/noprompt"]);
+    } catch (e) {
+      // Non-fatal if nothing to add
+      this.log(`VSTFS: Auto-add before check-in: ${String(e)}`);
+    }
+
+    let args: string[] = ["checkin"]; 
+
+    if (files && files.length > 0) {
+      // Check in only the selected files
+      args.push(...files);
+      args.push(`/comment:${comment || ""}`);
+      args.push("/noprompt");
+    } else {
+      // Check in all pending changes under the current directory
+      args.push(".");
+      args.push("/recursive");
+      args.push(`/comment:${comment || ""}`);
+      args.push("/noprompt");
+    }
+
     await this.run(args);
   }
 
@@ -323,20 +344,63 @@ export class TFVC {
   }
 
   async changeset(id: number): Promise<TFHistoryItem | null> {
-    const { stdout } = await this.run(["changeset", id.toString(), "/format:detailed"]);
-    const [item] = parseHistory(stdout);
-    return item || null;
+    // Use history in detailed format filtered to the specific changeset
+    const item = this.config?.serverPath || this.cwd || ".";
+    const { stdout } = await this.run([
+      "history",
+      item,
+      "/recursive",
+      "/format:detailed",
+      "/noprompt",
+      `/version:C${id}~C${id}`
+    ]);
+    const items = parseHistory(stdout);
+    const match = items.find(h => h.changesetId === id) || items[0];
+    return match || null;
   }
 
   async getFileAtChangeset(file: string, id: number): Promise<string> {
-    const tmp = path.join(os.tmpdir(), `vstfs-${id}-${path.basename(file).replace(/[\\/:*?"<>|]/g, "_")}`);
-    const { stdout } = await this.run(["view", `${file};C${id}`]);
-    fs.writeFileSync(tmp, stdout, "utf-8");
-    return tmp;
+    // Normalize to local absolute path in working folder
+    const localTarget = this.toLocalPath(file);
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `vstfs-C${id}-${path.basename(localTarget).replace(/[\\/:*?"<>|]/g, "_")}`);
+
+    // Use tf view to get content at specific changeset
+    const { stdout } = await this.run(["view", `${file};C${id}`, "/noprompt"]);
+
+    // Ensure CRLF for Windows text files; write UTF-8
+    const normalized = stdout.replace(/\r?\n/g, os.EOL);
+    fs.writeFileSync(tmpFile, normalized, { encoding: "utf8" });
+    return tmpFile;
   }
 
   async rollbackToChangeset(id: number): Promise<void> {
     await this.run(["rollback", `/changeset:C${id}`]);
+  }
+
+  async getPreviousChangesetIdForFile(file: string, currentId: number): Promise<number | null> {
+    try {
+      const { stdout } = await this.run([
+        "history",
+        file,
+        "/format:detailed",
+        "/stopafter:2",
+        `/version:C1~C${currentId}`,
+        "/noprompt"
+      ]);
+      const items = parseHistory(stdout)
+        .filter(h => h.files.some(f => f.path.toLowerCase().includes(path.basename(file).toLowerCase())));
+      if (items.length === 0) return null;
+      // Results are typically newest-first; pick the first id < current if present, otherwise the second item
+      const sorted = items.sort((a, b) => b.changesetId - a.changesetId);
+      const firstBelow = sorted.find(h => h.changesetId < currentId);
+      if (firstBelow) return firstBelow.changesetId;
+      if (sorted.length >= 2) return sorted[1].changesetId;
+      return null;
+    } catch (e) {
+      this.log(`VSTFS: Could not find previous changeset for ${file} at C${currentId}: ${String(e)}`);
+      return null;
+    }
   }
 }
 

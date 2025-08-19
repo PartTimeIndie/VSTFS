@@ -104,17 +104,80 @@ export async function activate(ctx: vscode.ExtensionContext) {
   }));
 
   reg("vstfs.checkIn", async () => {
+    // First, get the pending changes to show what will be checked in
+    const pending = await tfvc.pendingChanges();
+    if (pending.length === 0) {
+      vscode.window.showInformationMessage("TFVC: No pending changes to check in.");
+      return;
+    }
+
+    // Create file selection items with checkboxes
+    const fileItems = pending.map(item => ({
+      label: `${item.action}: ${item.file}`,
+      description: item.file,
+      action: item.action,
+      file: item.file,
+      picked: true // All files are selected by default
+    }));
+
+    // Show file selection dialog
+    const selectedItems = await vscode.window.showQuickPick(fileItems, {
+      canPickMany: true,
+      placeHolder: "Select files to check in (uncheck to exclude)",
+      title: `Check In - Select Files (${pending.length} pending changes)`
+    });
+
+    if (!selectedItems || selectedItems.length === 0) {
+      vscode.window.showInformationMessage("TFVC: No files selected for check-in.");
+      return;
+    }
+
+    // Show what will be checked in
+    const fileList = selectedItems.map(item => `${item.action}: ${item.file}`).join('\n');
+    const confirm = await vscode.window.showWarningMessage(
+      `Check in the following ${selectedItems.length} selected changes?\n\n${fileList}`,
+      { modal: true, detail: `Excluded ${pending.length - selectedItems.length} files from check-in.` },
+      "Yes, Check In"
+    );
+    if (confirm !== "Yes, Check In") return;
+
     const comment = await vscode.window.showInputBox({ 
       prompt: "Check-in comment", 
       value: "",
       placeHolder: "Enter a description of your changes..."
     });
     if (comment === undefined) return;
+    
     await withBusy("TFVC: Checking in...", async () => {
-      await tfvc.checkIn(comment);
+      // Check in only the selected files
+      const selectedFiles = selectedItems.map(item => item.file);
+      await tfvc.checkIn(comment, selectedFiles);
       pendingView.refresh();
       historyView.refresh();
-      vscode.window.showInformationMessage("TFVC: Check In completed.");
+      vscode.window.showInformationMessage(`TFVC: Check In completed for ${selectedItems.length} items.`);
+    });
+  });
+
+  reg("vstfs.checkInAll", async () => {
+    // Check in all pending changes without file selection
+    const pending = await tfvc.pendingChanges();
+    if (pending.length === 0) {
+      vscode.window.showInformationMessage("TFVC: No pending changes to check in.");
+      return;
+    }
+
+    const comment = await vscode.window.showInputBox({ 
+      prompt: "Check-in comment", 
+      value: "",
+      placeHolder: "Enter a description of your changes..."
+    });
+    if (comment === undefined) return;
+    
+    await withBusy("TFVC: Checking in all changes...", async () => {
+      await tfvc.checkIn(comment); // No file parameter = check in all
+      pendingView.refresh();
+      historyView.refresh();
+      vscode.window.showInformationMessage(`TFVC: Check In completed for all ${pending.length} items.`);
     });
   });
 
@@ -169,15 +232,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
     });
   });
 
-  reg("vstfs.showChangeset", async () => {
-    let id: number;
-    const input = await vscode.window.showInputBox({ 
-      prompt: "Changeset ID to open",
-      placeHolder: "e.g., 12345"
-    });
-    if (input) {
-      id = Number(input);
-    } else {
+  reg("vstfs.showChangeset", async (idArg?: number) => {
+    let id: number | undefined = typeof idArg === "number" ? idArg : undefined;
+    if (!id) {
       const input = await vscode.window.showInputBox({ 
         prompt: "Changeset ID to open",
         placeHolder: "e.g., 12345"

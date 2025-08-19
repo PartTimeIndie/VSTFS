@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { TFVC, TFHistoryItem } from "../tfvc";
 import * as path from "path";
+import * as fs from "fs";
 
 export class ChangesetPanel {
   static current: ChangesetPanel | undefined;
@@ -28,24 +29,48 @@ export class ChangesetPanel {
     this.render();
     this.panel.webview.onDidReceiveMessage(async (msg) => {
       if (msg.type === "openFileAtVersion") {
-        const filePath = msg.file as string;
-        const temp = await this.tfvc.getFileAtChangeset(filePath, this.item.changesetId);
+        const serverPath = msg.file as string;
+        const temp = await this.tfvc.getFileAtChangeset(serverPath, this.item.changesetId);
         vscode.window.showTextDocument(vscode.Uri.file(temp), { preview: true });
-      } else if (msg.type === "diffWithWorkspace") {
-        const filePath = msg.file as string;
-        const temp = await this.tfvc.getFileAtChangeset(filePath, this.item.changesetId);
+      } else if (msg.type === "diffWithPrevious") {
+        const serverPath = msg.file as string;
+        const prevId = await this.tfvc.getPreviousChangesetIdForFile(serverPath, this.item.changesetId);
+        if (!prevId) {
+          vscode.window.showWarningMessage(`No previous version found for ${path.basename(serverPath)} before C${this.item.changesetId}.`);
+          return;
+        }
+        const prevTemp = await this.tfvc.getFileAtChangeset(serverPath, prevId);
+        const thisTemp = await this.tfvc.getFileAtChangeset(serverPath, this.item.changesetId);
+        vscode.commands.executeCommand(
+          "vscode.diff",
+          vscode.Uri.file(prevTemp),
+          vscode.Uri.file(thisTemp),
+          `C${prevId} ↔ C${this.item.changesetId}: ${path.basename(serverPath)}`
+        );
+      } else if (msg.type === "diffWithWorkspaceLatest") {
+        const serverPath = msg.file as string;
+        const workingLocal = this.tfvc.toLocalPath(serverPath);
+        const temp = await this.tfvc.getFileAtChangeset(serverPath, this.item.changesetId);
+
+        if (!fs.existsSync(workingLocal)) {
+          vscode.window.showWarningMessage(`Working file not found: ${workingLocal}. Showing file from C${this.item.changesetId} only.`);
+          vscode.window.showTextDocument(vscode.Uri.file(temp), { preview: true });
+          return;
+        }
+
         vscode.commands.executeCommand(
           "vscode.diff",
           vscode.Uri.file(temp),
-          vscode.Uri.file(filePath),
-          `C${this.item.changesetId} ↔ Working: ${path.basename(filePath)}`
+          vscode.Uri.file(workingLocal),
+          `C${this.item.changesetId} ↔ Working: ${path.basename(workingLocal)}`
         );
       } else if (msg.type === "revertFileToChangeset") {
-        const filePath = msg.file as string;
+        const serverPath = msg.file as string;
         // Minimal revert: fetch file at version and overwrite working copy
-        const temp = await this.tfvc.getFileAtChangeset(filePath, this.item.changesetId);
-        await vscode.workspace.fs.copy(vscode.Uri.file(temp), vscode.Uri.file(filePath), { overwrite: true });
-        vscode.window.showInformationMessage(`Reverted ${path.basename(filePath)} to C${this.item.changesetId}. Remember to Check In.`);
+        const temp = await this.tfvc.getFileAtChangeset(serverPath, this.item.changesetId);
+        const workingLocal = this.tfvc.toLocalPath(serverPath);
+        await vscode.workspace.fs.copy(vscode.Uri.file(temp), vscode.Uri.file(workingLocal), { overwrite: true });
+        vscode.window.showInformationMessage(`Reverted ${path.basename(workingLocal)} to C${this.item.changesetId}. Remember to Check In.`);
       }
     });
   }
@@ -59,8 +84,11 @@ export class ChangesetPanel {
           <button class="btn btn-primary" data-action="openFileAtVersion" data-file="${encodeURIComponent(f.path)}">
             <span class="icon">📄</span> Open
           </button>
-          <button class="btn btn-secondary" data-action="diffWithWorkspace" data-file="${encodeURIComponent(f.path)}">
-            <span class="icon">🔍</span> Diff
+          <button class="btn btn-secondary" data-action="diffWithPrevious" data-file="${encodeURIComponent(f.path)}">
+            <span class="icon">🔍</span> Diff Prev
+          </button>
+          <button class="btn" data-action="diffWithWorkspaceLatest" data-file="${encodeURIComponent(f.path)}">
+            <span class="icon">🆚</span> Diff Latest
           </button>
           <button class="btn btn-warning" data-action="revertFileToChangeset" data-file="${encodeURIComponent(f.path)}">
             <span class="icon">↩️</span> Revert
