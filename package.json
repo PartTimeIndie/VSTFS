@@ -113,6 +113,16 @@
         "command": "vstfs.refreshView",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "vstfs.undoAll",
+        "title": "TFVC: Undo All Pending Changes",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "vstfs.undoItem",
+        "title": "TFVC: Undo Change",
+        "icon": "$(discard)"
       }
     ],
     "menus": {
@@ -133,6 +143,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "vstfs.undoAll",
+          "when": "view == vstfs.pendingChanges",
+          "group": "navigation@4"
+        },
+        {
           "command": "vstfs.createBranch",
           "when": "view == vstfs.branches",
           "group": "navigation@1"
@@ -150,7 +165,7 @@
         {
           "command": "vstfs.refreshView",
           "when": "view == vstfs.pendingChanges || view == vstfs.branches || view == vstfs.history",
-          "group": "navigation@4"
+          "group": "navigation@5"
         }
       ],
       "commandPalette": [
@@ -214,6 +229,11 @@
           "group": "inline"
         },
         {
+          "command": "vstfs.undoItem",
+          "when": "view == vstfs.pendingChanges",
+          "group": "inline@1"
+        },
+        {
           "command": "vstfs.showChangeset",
           "when": "view == vstfs.history && viewItem == history-changeset",
           "group": "inline"
@@ -225,7 +245,7 @@
       "properties": {
         "vstfs.tfPath": {
           "type": "string",
-          "default": "C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\TeamFoundation\\\\Team Explorer\\\\TF.exe",
+          "default": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\TeamFoundation\\Team Explorer\\TF.exe",
           "description": "Path to the TFVC CLI (tf.exe)."
         },
         "vstfs.serverUrl": { "type": "string", "default": "" },

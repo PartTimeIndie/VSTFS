@@ -35,6 +35,10 @@ export class PendingChangesView implements vscode.TreeDataProvider<TFPendingItem
     
     // Add context value for context menu
     item.contextValue = `pending-${element.action}`;
+
+    // Set resource URI so context menu commands receive the file path
+    item.resourceUri = vscode.Uri.file(element.file);
+    item.tooltip = `${element.action.toUpperCase()} — ${element.file}`;
     
     // Command to open file
     item.command = {

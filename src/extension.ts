@@ -97,6 +97,20 @@ export async function activate(ctx: vscode.ExtensionContext) {
   reg("vstfs.history.refresh", () => historyView.refresh());
 
   // Commands
+  reg("vstfs.undoAll", async () => {
+    const confirm = await vscode.window.showWarningMessage(
+      "Undo ALL pending changes in this workspace?",
+      { modal: true },
+      "Yes"
+    );
+    if (confirm !== "Yes") return;
+    await withBusy("TFVC: Undoing all pending changes...", async () => {
+      await tfvc.undo();
+      pendingView.refresh();
+      vscode.window.showInformationMessage("TFVC: Undid all pending changes.");
+    });
+  });
+
   reg("vstfs.getLatest", () => withBusy("TFVC: Getting latest...", async () => {
     await tfvc.getLatest(".");
     pendingView.refresh();
@@ -304,6 +318,22 @@ export async function activate(ctx: vscode.ExtensionContext) {
         }
       }
     }
+  });
+
+  reg("vstfs.undoItem", async (uri: vscode.Uri) => {
+    if (!uri) return;
+    const fsPath = uri.fsPath;
+    const confirm = await vscode.window.showWarningMessage(
+      `Undo pending change for ${path.basename(fsPath)}?`,
+      { modal: true },
+      "Yes"
+    );
+    if (confirm !== "Yes") return;
+    await withBusy(`TFVC: Undoing ${path.basename(fsPath)}...`, async () => {
+      await tfvc.undo([fsPath]);
+      pendingView.refresh();
+      vscode.window.showInformationMessage(`TFVC: Undid change for ${path.basename(fsPath)}.`);
+    });
   });
 
   reg("vstfs.refreshView", async () => {

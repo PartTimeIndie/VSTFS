@@ -308,6 +308,14 @@ export class TFVC {
     await this.run(args);
   }
 
+  async undo(items?: string[]): Promise<void> {
+    if (items && items.length > 0) {
+      await this.run(["undo", ...items, "/noprompt"]);
+      return;
+    }
+    await this.run(["undo", ".", "/recursive", "/noprompt"]);
+  }
+
   async listBranches(): Promise<string[]> {
     const item = this.config?.serverPath || this.cwd || ".";
     const { stdout } = await this.run(["branches", item]);
