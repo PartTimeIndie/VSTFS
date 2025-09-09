@@ -50,6 +50,103 @@ export class TFVC {
     console.log(message);
   }
 
+  private getCollectionUrl(): string {
+    const raw = this.config?.serverUrl?.trim() || "";
+    try {
+      const u = new URL(raw);
+      const host = `${u.protocol}//${u.host}`;
+      const hostname = u.hostname.toLowerCase();
+      if (hostname === "dev.azure.com") {
+        const segs = u.pathname.split("/").filter(Boolean);
+        const org = segs[0] || "";
+        return org ? `${host}/${org}` : host;
+      }
+      // For *.visualstudio.com keep only host part
+      if (hostname.endsWith(".visualstudio.com")) {
+        return host;
+      }
+      return host + (u.pathname === "/" ? "" : u.pathname);
+    } catch {
+      return raw.replace(/\/$/, "");
+    }
+  }
+
+  // Detect TFVC authentication failures
+  private isAuthError(message: string): boolean {
+    const m = (message || "").toLowerCase();
+    return (
+      m.includes("tf30063") ||
+      m.includes("not authorized") ||
+      m.includes("unauthorized") ||
+      m.includes("401")
+    );
+  }
+
+  // Trigger TFVC sign-in UI by calling a command that requires auth
+  public async signIn(): Promise<void> {
+    if (!this.config?.serverUrl) {
+      throw new Error("VSTFS: serverUrl is not configured. Set 'vstfs.serverUrl' in settings.");
+    }
+    const collection = this.getCollectionUrl();
+    this.log(`VSTFS: Initiating sign-in for collection ${collection}`);
+    try {
+      await this.execVisibleOnce(["workspaces", `/collection:${collection}`]);
+    } catch (e) {
+      // Even if this command returns non-zero, the sign-in dialog may have been shown.
+      this.log(`VSTFS: Sign-in helper returned error (continuing): ${String(e)}`);
+    }
+  }
+
+  private execOnce(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+      execFile(
+        this.tfPath,
+        args,
+        { cwd: this.cwd, env: this.env, windowsHide: true, maxBuffer: 32 * 1024 * 1024 },
+        (err, stdout, stderr) => {
+          if (err) {
+            const msg = (stderr || stdout || String(err)).toString();
+            return reject(new Error(msg));
+          }
+          resolve({ stdout, stderr });
+        }
+      );
+    });
+  }
+
+  // Same as execOnce but with windowsHide:false so auth UI can appear
+  private execVisibleOnce(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+      execFile(
+        this.tfPath,
+        args,
+        { cwd: this.cwd, env: this.env, windowsHide: false, maxBuffer: 32 * 1024 * 1024 },
+        (err, stdout, stderr) => {
+          if (err) {
+            const msg = (stderr || stdout || String(err)).toString();
+            return reject(new Error(msg));
+          }
+          resolve({ stdout, stderr });
+        }
+      );
+    });
+  }
+
+  private async execWithAuthRetry(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    try {
+      return await this.execOnce(args);
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      if (this.isAuthError(msg) && this.config?.serverUrl) {
+        this.log("VSTFS: Authentication required. Opening TFVC sign-in and retrying...");
+        await this.signIn();
+        // Retry once
+        return await this.execOnce(args);
+      }
+      throw e;
+    }
+  }
+
   public toLocalPath(serverOrLocalPath: string): string {
     const cleaned = serverOrLocalPath.replace(/;C\d+$/i, "");
     // Already a local absolute path
@@ -101,7 +198,7 @@ export class TFVC {
         serverPath,
         this.cwd,
         "/workspace:" + this.config.workspace,
-        "/collection:" + this.config.serverUrl,
+        "/collection:" + this.getCollectionUrl(),
       ]);
 
       console.log(`Successfully mapped ${serverPath} -> ${this.cwd} for workspace ${this.config.workspace}`);
@@ -115,7 +212,7 @@ export class TFVC {
           "workspace",
           "/new",
           this.config.workspace,
-          "/collection:" + this.config.serverUrl,
+          "/collection:" + this.getCollectionUrl(),
           "/location:server",
         ]);
 
@@ -127,7 +224,7 @@ export class TFVC {
           serverPath,
           this.cwd,
           "/workspace:" + this.config.workspace,
-          "/collection:" + this.config.serverUrl,
+          "/collection:" + this.getCollectionUrl(),
         ]);
 
         console.log(`Created workspace ${this.config.workspace} and mapped ${serverPath} -> ${this.cwd}`);
@@ -139,15 +236,8 @@ export class TFVC {
   }
 
   private runBasic(args: string[]): Promise<{ stdout: string; stderr: string }> {
-    return new Promise((resolve, reject) => {
-      execFile(this.tfPath, args, { cwd: this.cwd, env: this.env, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
-        if (err) {
-          const msg = (stderr || stdout || String(err)).toString();
-          return reject(new Error(msg));
-        }
-        resolve({ stdout, stderr });
-      });
-    });
+    this.log(`VSTFS: Running basic TF.exe with args: ${args.join(' ')}`);
+    return this.execWithAuthRetry(args);
   }
 
   private async run(args: string[]): Promise<{ stdout: string; stderr: string }> {
@@ -155,33 +245,18 @@ export class TFVC {
     this.log(`VSTFS: Configuring workspace before running: ${args.join(' ')}`);
     await this.ensureWorkspaceConfigured();
     
-    return new Promise((resolve, reject) => {
-      // Only add collection parameter to specific commands that support it
-      const fullArgs = [...args];
-      
-      // Only add collection for commands that support it
-      if (this.config?.serverUrl && this.shouldAddCollection(args[0])) {
-        // Append collection after the command (not before), otherwise tf.exe treats it as the command
-        fullArgs.push("/collection:" + this.config.serverUrl);
-      }
-      
-      this.log(`VSTFS: Running TF.exe with args: ${fullArgs.join(' ')}`);
-      this.log(`VSTFS: Working directory: ${this.cwd}`);
-      this.log(`VSTFS: ServerPath: ${this.config?.serverPath}`);
-      
-      // Integrated Windows authentication is handled by the system
-      // No specific environment variables or command line arguments needed for integrated auth
+    // Only add collection parameter to specific commands that support it
+    const fullArgs = [...args];
+    if (this.config?.serverUrl && this.shouldAddCollection(args[0])) {
+      fullArgs.push("/collection:" + this.getCollectionUrl());
+    }
 
-      execFile(this.tfPath, fullArgs, { cwd: this.cwd, env: this.env, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
-        if (err) {
-          const msg = (stderr || stdout || String(err)).toString();
-          this.log(`VSTFS: TF.exe command failed: ${msg}`);
-          return reject(new Error(msg));
-        }
-        this.log(`VSTFS: TF.exe command succeeded: ${stdout.substring(0, 100)}...`);
-        resolve({ stdout, stderr });
-      });
-    });
+    this.log(`VSTFS: Running TF.exe with args: ${fullArgs.join(' ')}`);
+    this.log(`VSTFS: Working directory: ${this.cwd}`);
+    this.log(`VSTFS: ServerPath: ${this.config?.serverPath}`);
+
+    // Integrated Windows authentication is handled by the system
+    return this.execWithAuthRetry(fullArgs);
   }
 
   // Only add collection parameter to commands that support it

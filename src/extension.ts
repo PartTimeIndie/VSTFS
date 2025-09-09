@@ -346,6 +346,14 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.window.showInformationMessage("VSTFS views refreshed.");
   });
 
+  // Manual sign-in command
+  reg("vstfs.signIn", async () => {
+    await withBusy("TFVC: Signing in...", async () => {
+      await tfvc.signIn();
+      vscode.window.showInformationMessage("TFVC: Sign-in attempted. If prompted, complete the dialog then retry your action.");
+    });
+  });
+
   // Status bar
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   status.text = `TFVC: ${cfg.workspace || "workspace"}@${cfg.serverUrl || "server"}`;
